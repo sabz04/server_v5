@@ -2,13 +2,21 @@ package com.template;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 
+import android.app.NotificationManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
+import android.graphics.drawable.Drawable;
 import android.net.NetworkInfo;
+import android.os.Build;
 import android.os.Bundle;
 import android.net.ConnectivityManager;
+import android.widget.ImageView;
+
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
 import com.google.firebase.FirebaseApp;
@@ -18,6 +26,7 @@ import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
 import com.google.firebase.messaging.FirebaseMessaging;
+import com.google.firebase.messaging.FirebaseMessagingService;
 
 import java.io.IOException;
 import java.security.Key;
@@ -37,7 +46,18 @@ public class LoadingActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_loading);
+
+        ImageView imageView = findViewById(R.id.appIconImageView);
+        try {
+            Drawable appIcon = getPackageManager().getApplicationInfo(getPackageName(), 0).loadIcon(getPackageManager());
+            imageView.setImageDrawable(appIcon);
+
+        } catch (PackageManager.NameNotFoundException e) {
+            throw new RuntimeException(e);
+        }
+
         FirebaseApp.initializeApp(this);
+
 
         FirebaseDatabase database = FirebaseDatabase.getInstance();
         DatabaseReference reference = database.getReference();
@@ -66,6 +86,7 @@ public class LoadingActivity extends AppCompatActivity {
             else{
                 MoveBetweenActivities(LoadingActivity.this, WebActivity.class);
             }
+            finish();
             return;
         }
         //установка слушателя для чтения данных из базы данных
@@ -96,6 +117,7 @@ public class LoadingActivity extends AppCompatActivity {
 
                                 EditSavedValue(sharedPreferences,Keys.PREFS_NAME_LINK, Keys.PREFS_NAME_LINK_ERROR);
                                 MoveBetweenActivities(LoadingActivity.this, MainActivity.class);
+                                finish();
                             }
 
                             @Override
@@ -108,26 +130,34 @@ public class LoadingActivity extends AppCompatActivity {
                                 else{
                                     EditSavedValue(sharedPreferences,Keys.PREFS_NAME_LINK, Keys.PREFS_NAME_LINK_ERROR);
                                 }
+                                finish();
                             }
                         });
                     } catch (Exception e) {
                         e.printStackTrace();
+                        finish();
                     }
                 } else {
+                    EditSavedValue(sharedPreferences,Keys.PREFS_NAME_LINK, Keys.PREFS_NAME_LINK_ERROR);
+                    MoveBetweenActivities(LoadingActivity.this, MainActivity.class);
+                    finish();
                 }
             }
 
             @Override
             public void onCancelled(@NonNull DatabaseError databaseError) {
-                // Обработка ошибки чтения данных
+                EditSavedValue(sharedPreferences,Keys.PREFS_NAME_LINK, Keys.PREFS_NAME_LINK_ERROR);
+                MoveBetweenActivities(LoadingActivity.this, MainActivity.class);
+                finish();
             }
         });
 
 
     }
+
     private void ClearSharedPrefs(SharedPreferences sharedPreferences){
         SharedPreferences.Editor editor = sharedPreferences.edit();
-        editor.clear();
+        editor.remove(Keys.PREFS_NAME_LINK);
         editor.apply();
     }
     //чтобы постоянно не писать одно и то же обращение к сохр данным
@@ -143,8 +173,19 @@ public class LoadingActivity extends AppCompatActivity {
     }
     //формирование ссылки для отправки на сервер запроса
     private String GetUrl(String domenNameURL){
+        SharedPreferences sharedPreferences = getApplicationContext().getSharedPreferences(Keys.PREFS_NAME, MODE_PRIVATE);
+
+        String userId = sharedPreferences.getString(Keys.PREFS_USER_ID, "");
+        //генерируем id текущего пользователя, если его еще нет
+        if(userId.equals("")){
+            SharedPreferences.Editor editor = sharedPreferences.edit();
+            userId = UUID.randomUUID().toString();
+            editor.putString(Keys.PREFS_USER_ID, userId);
+            editor.apply();
+        }
+
         return  String.format("%s/?packageid=%s&usserid=%s&getz=%s&getr=utm_source=google-play&utm_medium=organic",
-                domenNameURL, getApplicationContext().getPackageName(), UUID.randomUUID(), TimeZone.getDefault().getID()
+                domenNameURL, getApplicationContext().getPackageName(), userId, TimeZone.getDefault().getID()
                 );
     }
 }
